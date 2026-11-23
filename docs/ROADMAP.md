@@ -33,12 +33,12 @@ Who: 🤖 Claude · 👤 Sanja · 🤝 together. Claude builds and Sanja reviews
   - **Decision (23 Nov):** no hl7apy dependency, and no field names in v1. `scan`, `diff` and `test` work on positions (`PID-5`). The parser needs no structure definitions; only reports and a future validator would.
   - **Why:** Sanja's earlier experience with hl7apy: mistakes in its field definitions, and slow. Its code rebuilds each element's structure every time the element is created, with no caching. Its definitions are positional Python tuples, one full copy per version (~16k lines for v2.5), which are hard to check against the spec. Max lengths are missing (`-1` for 2,095 of the 2,120 v2.5 fields), and optionality is only a min/max count.
   - **If we add field names later** (e.g. the week-4 HTML report): build them from the spec, using hl7apy at most as a cross-check, as flat tables per version covering only the segments we use. `fields.tsv` (seg, seq, name, dt, len, opt, rep, table), `datatypes.tsv` (dt, seq, name, dt, len, table) and `messages.txt` in the spec's own notation (`ADT_A01: MSH [{SFT}] EVN PID …`). Load them once into a dict keyed by `("PID", 5)`; the parser never uses them.
-- [ ] 🤖 Parser
-  - [ ] Encoding characters from MSH-1/MSH-2 (no hard-coded `|^~\&`)
-  - [ ] Fields, repetitions, components, subcomponents; escape sequences
-  - [ ] `\r`, `\n`, `\r\n` terminators; strip MLLP framing; batch files (FHS/BHS) and one message per file
-  - [ ] Strict mode (raise) and tolerant mode (record warnings, keep going)
-  - [ ] Serializer + Hypothesis round-trip test: `parse(serialize(m)) == m`
+- [x] 🤖 Parser
+  - [x] Encoding characters from MSH-1/MSH-2 (no hard-coded `|^~\&`)
+  - [x] Fields, repetitions, components, subcomponents; escape sequences
+  - [x] `\r`, `\n`, `\r\n` terminators; strip MLLP framing; batch files (FHS/BHS) and one message per file
+  - [x] Strict mode (raise) and tolerant mode (record warnings, keep going)
+  - [x] Serializer + Hypothesis round-trip test: `parse(serialize(m)) == m`
 - [ ] 🤝 Synthetic sample corpus in `samples/`: ADT, ORU and ORM from 2–3 made-up "vendors", with Z-segments, moved fields, missing segments, odd terminators and a few broken messages. 🤖 generates, 👤 checks that the variations look like real feeds
 - [ ] 🤖 `raphael7 scan <folder>`
   - [ ] Signature: MSH-9 type/trigger, MSH-12 version, ordered segment IDs (repeats collapsed), populated field positions
