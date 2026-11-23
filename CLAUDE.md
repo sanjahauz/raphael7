@@ -26,14 +26,10 @@ Raphael7: a Python CLI that scans messy HL7 v2 feeds, turns chosen messages into
 - **Tolerant by default, never silent.** Never drop a message, segment or value without recording a `ParseIssue` with a stable `code`. Strict mode raises only on error-level issues.
 - **Lossless.** Values stay raw (still escaped); `serialize(parse(text))` gives back the text. The round-trip property test must keep passing.
 
-## Writing code that Sanja can read
-Sanja reviews every change and must be able to read it quickly. Prefer clear over compact:
+## Writing code that humans can read
 - **Named fields, not positional tuples.** Return dataclasses (e.g. `ParseIssue`), not `(code, severity, message)`.
-- **Plain loops with named variables** over nested comprehensions and clever one-liners.
-- **Small functions named after the step they perform** (`split_lines`, `group_into_messages`). No inner functions with `nonlocal`.
-- **Each function starts with the HL7 reason it exists**, citing the field or segment (e.g. "MSH is special: field 1 *is* the separator, so it can't be split like other segments").
-- **Explicit beats short**, e.g. five lines naming each MSH-2 character instead of a padding trick.
-- A file should read top to bottom: public functions first, helpers below them.
+- **Explicit over clever:** plain loops, named intermediate values, small functions named after their step. No nested comprehensions or closures with `nonlocal`.
+- **Docstrings give the HL7 reason**, citing the field or segment (e.g. "MSH is special: field 1 *is* the separator, so it can't be split like other segments").
 
 ## Workflow
 - **Plan in plain words first.** Before writing a feature, describe the approach in a few sentences and wait for agreement.
