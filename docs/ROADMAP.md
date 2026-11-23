@@ -29,7 +29,10 @@ Who: 🤖 Claude · 👤 Sanja · 🤝 together. Claude builds and Sanja reviews
 - [x] 👤 Pick the license: Apache-2.0
 - [x] 🤝 Create the public GitHub repo (`sanjahauz/raphael7`)
 - [ ] 🤖 Repo setup: `uv`, `src/raphael7/` layout ([PROJECT_PLAN §5](PROJECT_PLAN.md#5-technical-design)), Typer CLI stub, pytest, ruff, CI (lint + tests)
-- [ ] 🤝 Spike (≤ 2 h): can hl7apy's (MIT) v2.x structure definitions be reused as data? 🤖 investigates and recommends, 👤 decides; write the decision down
+- [x] 🤝 Spike (≤ 2 h): can hl7apy's (MIT) v2.x structure definitions be reused as data? 🤖 investigates and recommends, 👤 decides; write the decision down
+  - **Decision (23 Nov):** no hl7apy dependency, and no field names in v1. `scan`, `diff` and `test` work on positions (`PID-5`). The parser needs no structure definitions; only reports and a future validator would.
+  - **Why:** Sanja's earlier experience with hl7apy: mistakes in its field definitions, and slow. Its code rebuilds each element's structure every time the element is created, with no caching. Its definitions are positional Python tuples, one full copy per version (~16k lines for v2.5), which are hard to check against the spec. Max lengths are missing (`-1` for 2,095 of the 2,120 v2.5 fields), and optionality is only a min/max count.
+  - **If we add field names later** (e.g. the week-4 HTML report): build them from the spec, using hl7apy at most as a cross-check, as flat tables per version covering only the segments we use. `fields.tsv` (seg, seq, name, dt, len, opt, rep, table), `datatypes.tsv` (dt, seq, name, dt, len, table) and `messages.txt` in the spec's own notation (`ADT_A01: MSH [{SFT}] EVN PID …`). Load them once into a dict keyed by `("PID", 5)`; the parser never uses them.
 - [ ] 🤖 Parser
   - [ ] Encoding characters from MSH-1/MSH-2 (no hard-coded `|^~\&`)
   - [ ] Fields, repetitions, components, subcomponents; escape sequences
