@@ -32,7 +32,7 @@ from raphael7.parser.encoding import (
 )
 from raphael7.parser.escape import escape_problems
 from raphael7.parser.issues import IssueLog, ParseError, ParseIssue, Severity
-from raphael7.parser.model import Field, Message, Segment
+from raphael7.parser.model import Field, Message, Segment, first_value
 
 # Batch envelope: file header/trailer (FHS/FTS) and batch header/trailer (BHS/BTS).
 ENVELOPE_SEGMENTS = frozenset({"FHS", "BHS", "BTS", "FTS"})
@@ -71,6 +71,14 @@ class ParseResult:
 
 
 @dataclass(frozen=True, slots=True)
+class DecodedText:
+    """The result of :func:`decode`."""
+
+    text: str
+    warning: ParseIssue | None = None  # set when some characters may be wrong
+
+
+@dataclass(frozen=True, slots=True)
 class Line:
     """One segment line of the input."""
 
@@ -79,17 +87,15 @@ class Line:
     terminator: str  # "\r", "\n", "\r\n", or "" for a last line without one
 
 
-# --- public functions ---------------------------------------------------------
-
-
 def parse(data: str | bytes, *, strict: bool = False) -> ParseResult:
     """Parse any HL7 v2 input into messages (see the module docstring for the steps)."""
     log = IssueLog(strict)
 
     if isinstance(data, bytes):
-        text, decode_issue = decode(data)
-        if decode_issue:
-            log.add(decode_issue)
+        decoded = decode(data)
+        text = decoded.text
+        if decoded.warning:
+            log.add(decoded.warning)
     else:
         text = data.removeprefix("﻿")  # byte order mark
 
@@ -141,15 +147,15 @@ def parse_file(path: str | Path, *, strict: bool = False) -> ParseResult:
     return parse(Path(path).read_bytes(), strict=strict)
 
 
-def decode(data: bytes) -> tuple[str, ParseIssue | None]:
+def decode(data: bytes) -> DecodedText:
     """Decode bytes to text, honouring the charset declared in MSH-18.
 
     Order: UTF-8 byte order mark, then the MSH-18 charset, then UTF-8, then
-    Latin-1 (which accepts any bytes, so decoding never fails). Returns the
-    text and a warning when the result may be wrong.
+    Latin-1 (which accepts any bytes, so decoding never fails). Comes with a
+    warning when some characters may be wrong.
     """
     if data.startswith(codecs.BOM_UTF8):
-        return data[len(codecs.BOM_UTF8) :].decode("utf-8", "replace"), None
+        return DecodedText(data[len(codecs.BOM_UTF8) :].decode("utf-8", "replace"))
 
     declared = _declared_charset(data)
     codec = _codec_for(declared) if declared else None
@@ -157,19 +163,16 @@ def decode(data: bytes) -> tuple[str, ParseIssue | None]:
         text = data.decode(codec, "replace")
         if "�" in text:  # a byte the declared charset doesn't have
             warning = ParseIssue("decode", f"bytes not valid in MSH-18 charset {declared!r}")
-            return text, warning
-        return text, None
+            return DecodedText(text, warning)
+        return DecodedText(text)
 
     try:
-        return data.decode("utf-8"), None
+        return DecodedText(data.decode("utf-8"))
     except UnicodeDecodeError:
         warning = ParseIssue(
             "decode", "not valid UTF-8 and MSH-18 names no known charset; decoded as Latin-1"
         )
-        return data.decode("latin-1"), warning
-
-
-# --- steps 1-3: bytes to lines ----------------------------------------------------
+        return DecodedText(data.decode("latin-1"), warning)
 
 
 def _declared_charset(data: bytes) -> str | None:
@@ -227,89 +230,89 @@ def _split_lines(text: str) -> list[Line]:
     return lines
 
 
-# --- step 4: lines to messages -------------------------------------------------------
-
-
 def _group_into_messages(lines: list[Line], log: IssueLog) -> ParseResult:
     """Cut the lines into messages: each MSH starts one, envelope segments end one."""
-    result = ParseResult()
-    # A charset warning applies to every message's content, so each one gets a copy.
-    decode_issues = [issue for issue in log.issues if issue.code == "decode"]
-
-    message_lines: list[Line] = []  # lines of the message being collected
-    envelope_encoding = DEFAULT_ENCODING  # from the latest FHS/BHS
-    open_batches: list[int] = []  # message count per BHS whose BTS hasn't come yet
-
+    grouper = _MessageGrouper(log)
     for line in lines:
+        grouper.add(line)
+    return grouper.finish()
+
+
+class _MessageGrouper:
+    """Collects lines into messages, one line at a time.
+
+    A message runs from its MSH to the next MSH or batch envelope segment.
+    Envelope segments (FHS, BHS, BTS, FTS) belong to no message and are kept
+    apart. Lines before the first MSH are an error.
+    """
+
+    def __init__(self, log: IssueLog):
+        self.log = log
+        self.result = ParseResult()
+        # A charset warning applies to every message's content, so each one gets a copy.
+        self.decode_issues = [issue for issue in log.issues if issue.code == "decode"]
+        self.message_lines: list[Line] = []  # lines of the message being collected
+        self.envelope_encoding = DEFAULT_ENCODING  # from the latest FHS or BHS
+        self.open_batches: list[int] = []  # message count per BHS whose BTS hasn't come yet
+
+    def add(self, line: Line) -> None:
         seg_id = line.text[:3]
-        ends_current_message = seg_id == "MSH" or seg_id in ENVELOPE_SEGMENTS
-
-        if ends_current_message and message_lines:
-            _finish_message(message_lines, decode_issues, log, result, open_batches)
-            message_lines = []
-
         if seg_id == "MSH":
-            message_lines.append(line)
+            self._close_message()
+            self.message_lines.append(line)
         elif seg_id in ENVELOPE_SEGMENTS:
-            envelope_encoding = _read_envelope_segment(
-                line, envelope_encoding, open_batches, log, result
-            )
-        elif message_lines:
-            message_lines.append(line)
+            self._close_message()
+            self._add_envelope_segment(line)
+        elif self.message_lines:
+            self.message_lines.append(line)
         else:
-            log.error(
+            self.log.error(
                 "text-before-msh",
                 f"segment {line.text[:20]!r} is outside any message (no MSH before it)",
                 line=line.number,
             )
 
-    if message_lines:
-        _finish_message(message_lines, decode_issues, log, result, open_batches)
-    return result
+    def finish(self) -> ParseResult:
+        self._close_message()
+        return self.result
 
+    def _close_message(self) -> None:
+        if not self.message_lines:
+            return
+        message = _build_message(self.message_lines, self.decode_issues, self.log.strict)
+        self.result.messages.append(message)
+        if self.open_batches:
+            self.open_batches[-1] += 1
+        self.message_lines = []
 
-def _finish_message(lines, decode_issues, log, result, open_batches) -> None:
-    message = _build_message(lines, decode_issues, log.strict)
-    result.messages.append(message)
-    if open_batches:
-        open_batches[-1] += 1
+    def _add_envelope_segment(self, line: Line) -> None:
+        """FHS and BHS declare delimiters like MSH; BTS and FTS use the latest ones."""
+        seg_id = line.text[:3]
+        if seg_id in HEADER_SEGMENTS:
+            header = read_header_encoding(line.text)
+            self.envelope_encoding = header.encoding
+            for issue in header.issues:
+                self.log.add(_at_line(issue, line.number))
 
+        segment = _parse_segment(line, self.envelope_encoding, self.log)
+        self.result.envelope.append(segment)
 
-def _read_envelope_segment(
-    line: Line,
-    envelope_encoding: Encoding,
-    open_batches: list[int],
-    log: IssueLog,
-    result: ParseResult,
-) -> Encoding:
-    """Keep an FHS/BHS/BTS/FTS segment and check BTS-1 (messages in the batch).
-
-    FHS and BHS declare delimiters like MSH; BTS and FTS use the latest ones.
-    Returns the delimiters to use for the next envelope segment.
-    """
-    seg_id = line.text[:3]
-    if seg_id in HEADER_SEGMENTS:
-        header = read_header_encoding(line.text)
-        envelope_encoding = header.encoding
-        for issue in header.issues:
-            log.add(_at_line(issue, line.number))
-
-    segment = _parse_segment(line, envelope_encoding, log)
-    result.envelope.append(segment)
-
-    if seg_id == "BHS":
-        open_batches.append(0)
-    elif seg_id == "BTS":
-        actual = open_batches.pop() if open_batches else 0
-        _check_batch_count(segment, actual, line, log)
-    return envelope_encoding
+        if seg_id == "BHS":
+            self.open_batches.append(0)
+        elif seg_id == "BTS":
+            messages_in_batch = self.open_batches.pop() if self.open_batches else 0
+            _check_batch_count(segment, messages_in_batch, line, self.log)
 
 
 def _check_batch_count(bts: Segment, actual: int, line: Line, log: IssueLog) -> None:
-    bts1 = bts.field(1)
-    declared = bts1[0][0][0].strip() if bts1 else ""
+    """BTS-1 (optional) is the number of messages in the batch: warn if it is wrong.
+
+    A wrong count usually means messages were lost or added when the batch
+    file was put together.
+    """
+    declared = first_value(bts.field(1)).strip()
     if declared == "":
-        return  # BTS-1 is optional
+        return
     if not declared.isdigit():
         log.warning("batch-count", f"BTS-1 is not a number: {declared!r}", line=line.number)
     elif int(declared) != actual:
@@ -319,9 +322,6 @@ def _check_batch_count(bts: Segment, actual: int, line: Line, log: IssueLog) -> 
             line=line.number,
             location="BTS-1",
         )
-
-
-# --- step 5: one message's lines to segments ------------------------------------------
 
 
 def _build_message(lines: list[Line], decode_issues: list[ParseIssue], strict: bool) -> Message:

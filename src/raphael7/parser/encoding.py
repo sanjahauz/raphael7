@@ -129,5 +129,6 @@ def _char_at(text: str, index: int) -> str | None:
 
 
 def _unusable(fallback: Encoding, message: str) -> HeaderEncoding:
+    """An unusable header: carry on with ``fallback`` delimiters, plus an error."""
     issue = ParseIssue("bad-encoding", message, Severity.ERROR, location="MSH-2")
     return HeaderEncoding(fallback, [issue])

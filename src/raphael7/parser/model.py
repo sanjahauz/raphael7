@@ -31,6 +31,8 @@ type Field = tuple[Repetition, ...]
 
 @dataclass(frozen=True, slots=True)
 class Segment:
+    """One segment: its 3-character ID (MSH, PID, ZPI ...) and its fields, numbered from 1."""
+
     id: str
     fields: tuple[Field, ...] = ()
 
@@ -41,6 +43,12 @@ class Segment:
 
 @dataclass(frozen=True, slots=True)
 class Message:
+    """One message, from its MSH to the segment before the next MSH.
+
+    ``encoding`` holds the delimiters read from this message's own MSH, since
+    two messages in the same feed may use different ones.
+    """
+
     segments: tuple[Segment, ...]
     encoding: Encoding = DEFAULT_ENCODING
     # Issues do not count when comparing messages: same content means equal.
@@ -114,7 +122,8 @@ class Message:
         return self.get("MSH-10") or None
 
 
-# --- joining split values back into raw text --------------------------------
+# Joining is the reverse of splitting: subcomponents with &, components with ^,
+# repetitions with ~ (or whatever MSH-2 declared).
 
 
 def join_component(component: Component, enc: Encoding) -> str:
@@ -129,7 +138,17 @@ def join_field(fld: Field, enc: Encoding) -> str:
     return (enc.repetition or "").join(join_repetition(r, enc) for r in fld)
 
 
-# --- paths --------------------------------------------------------------------
+def first_value(fld: Field | None) -> str:
+    """The first subcomponent of the first component of the first repetition.
+
+    That is the whole value of a field that holds a plain value, such as
+    MSH-2 (never split) or BTS-1 (a count). ``""`` if the field is missing.
+    """
+    if fld is None:
+        return ""
+    first_repetition = fld[0]
+    first_component = first_repetition[0]
+    return first_component[0]
 
 
 @dataclass(frozen=True, slots=True)

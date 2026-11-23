@@ -1,7 +1,7 @@
 """Turn parsed messages back into HL7 v2 text (the reverse of parsing)."""
 
 from raphael7.parser.encoding import HEADER_SEGMENTS, Encoding
-from raphael7.parser.model import Message, Segment, join_field
+from raphael7.parser.model import Message, Segment, first_value, join_field
 
 
 def serialize(msg: Message, terminator: str = "\r") -> str:
@@ -17,7 +17,7 @@ def serialize_segment(seg: Segment, enc: Encoding) -> str:
     written as-is because it was never split.
     """
     if seg.id in HEADER_SEGMENTS and len(seg.fields) >= 2:
-        encoding_chars = seg.fields[1][0][0][0]  # field 2 holds one unsplit value
+        encoding_chars = first_value(seg.fields[1])
         text = seg.id + enc.field + encoding_chars
         other_fields = seg.fields[2:]
     else:
