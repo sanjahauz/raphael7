@@ -42,6 +42,8 @@ Who: 🤖 Claude · 👤 Sanja · 🤝 together. Claude builds and Sanja reviews
 - [x] 🤝 Synthetic sample corpus in `samples/`: ADT, ORU and ORM from 2–3 made-up "vendors", with Z-segments, moved fields, missing segments, odd terminators and a few broken messages. 🤖 generates, 👤 checks that the variations look like real feeds
 - [ ] 🤖 `raphael7 scan <folder>`
   - [ ] Signature: MSH-9 type/trigger, MSH-12 version, ordered segment IDs (repeats collapsed), populated field positions
+    - **Decision (24 Nov):** a field holding only `""` (HL7 null) counts as populated.
+    - **Why:** the spec says `""` means "delete the stored value" and empty means "not sent", but senders use `""` inconsistently. Scan records only that the sender put something there, so a vendor switching between empty and `""` shows up as a variant.
   - [ ] Exact-signature clusters, then near neighbours (Jaccard on populated positions)
   - [ ] Outliers (small, distant clusters + messages with parse warnings), Z-segment list, field-usage stats
   - [ ] Terminal report (Rich) + `--json`
