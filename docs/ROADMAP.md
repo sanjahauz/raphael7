@@ -39,7 +39,7 @@ Who: 🤖 Claude · 👤 Sanja · 🤝 together. Claude builds and Sanja reviews
   - [x] `\r`, `\n`, `\r\n` terminators; strip MLLP framing; batch files (FHS/BHS) and one message per file
   - [x] Strict mode (raise) and tolerant mode (record warnings, keep going)
   - [x] Serializer + Hypothesis round-trip test: `parse(serialize(m)) == m`
-- [ ] 🤝 Synthetic sample corpus in `samples/`: ADT, ORU and ORM from 2–3 made-up "vendors", with Z-segments, moved fields, missing segments, odd terminators and a few broken messages. 🤖 generates, 👤 checks that the variations look like real feeds
+- [x] 🤝 Synthetic sample corpus in `samples/`: ADT, ORU and ORM from 2–3 made-up "vendors", with Z-segments, moved fields, missing segments, odd terminators and a few broken messages. 🤖 generates, 👤 checks that the variations look like real feeds
 - [ ] 🤖 `raphael7 scan <folder>`
   - [ ] Signature: MSH-9 type/trigger, MSH-12 version, ordered segment IDs (repeats collapsed), populated field positions
   - [ ] Exact-signature clusters, then near neighbours (Jaccard on populated positions)
