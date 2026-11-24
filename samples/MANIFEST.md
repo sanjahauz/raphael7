@@ -54,9 +54,3 @@ code by their shape.
 | `unescaped-delimiter.hl7` | NTE text with a raw `&` and `\|` | none: an extra field and subcomponent |
 | `truncated.hl7` | file cut two-thirds of the way, mid-segment | none: missing segments and fields |
 
-## Known gap
-
-The parser reads MSH-18 only when the input starts with MSH. Vendor C's batch
-files start with FHS, so their Hebrew is decoded as Latin-1 with a `decode`
-warning. `expected-issues.json` lists the correct result (no issue); the test
-marks these files as expected failures until the parser is fixed.

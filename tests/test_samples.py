@@ -25,15 +25,6 @@ def load_generator():
 make_samples = load_generator()
 EXPECTED = json.loads((SAMPLES / make_samples.EXPECTED_ISSUES_FILE).read_text(encoding="utf-8"))
 
-# Known parser gap: decode() reads MSH-18 only when the input starts with MSH.
-# A batch file starts with FHS, so vendor C's 8859/8 Hebrew falls back to
-# Latin-1 with a "decode" warning. strict=True: this fails once it is fixed.
-KNOWN_GAPS = {
-    path
-    for path in EXPECTED
-    if path.startswith("vendor-c/oru-batch-") or path == "broken/batch-count.hl7"
-}
-
 
 def test_committed_files_match_the_generator():
     """Run `uv run python scripts/make_samples.py` after changing the generator."""
@@ -64,10 +55,7 @@ def issue_codes(path: Path) -> list[str]:
 def issue_cases():
     cases = []
     for path, codes in sorted(EXPECTED.items()):
-        marks = []
-        if path in KNOWN_GAPS:
-            marks.append(pytest.mark.xfail(strict=True, reason="MSH-18 not read in batch files"))
-        cases.append(pytest.param(path, codes, id=path, marks=marks))
+        cases.append(pytest.param(path, codes, id=path))
     return cases
 
 

@@ -246,6 +246,15 @@ def test_bytes_msh18_hebrew(tmp_path):
     assert msg.issues == ()
 
 
+def test_batch_file_charset_from_first_msh():
+    """FHS and BHS have no charset field: MSH-18 of the first message counts."""
+    message = ADT.replace("|P|2.5.1", "|P|2.5.1||||||8859/8").replace("Cohen", "כהן")
+    batch = "FHS|^~\\&|LAB\rBHS|^~\\&|LAB\r" + message + "BTS|1\rFTS|1\r"
+    result = parse(batch.encode("iso-8859-8"))
+    assert result.issues == []
+    assert result.messages[0].get("PID-5.1") == "כהן"
+
+
 def test_bytes_latin1_fallback():
     data = ADT.replace("Dana", "Dané").encode("latin-1")
     result = parse(data)

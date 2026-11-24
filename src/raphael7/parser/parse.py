@@ -176,20 +176,36 @@ def decode(data: bytes) -> DecodedText:
 
 
 def _declared_charset(data: bytes) -> str | None:
-    """MSH-18 (character set) read straight from the bytes, before decoding.
+    """MSH-18 (character set) of the first MSH, read straight from the bytes.
 
-    The delimiters are plain ASCII, so the MSH line can be split as bytes.
+    A batch file starts with FHS and BHS, which have no charset field, so
+    the first MSH line is looked for rather than expected at the start.
+    The whole input is decoded with that one charset. The delimiters are
+    plain ASCII, so the MSH line can be split as bytes.
     """
-    head = data.lstrip(b"\x0b\xef\xbb\xbf \t\r\n")
-    if not head.startswith(b"MSH") or len(head) < 4:
+    msh_line = _first_msh_line(data)
+    if msh_line is None or len(msh_line) < 4:
         return None
-    msh_line = re.split(rb"[\r\n\x1c]", head, maxsplit=1)[0]
-    field_sep = head[3:4]
+    field_sep = msh_line[3:4]
     parts = msh_line.split(field_sep)  # parts[0] is "MSH", parts[n - 1] is MSH-n
     if len(parts) < 18:
         return None
     msh18 = parts[17].split(b"^")[0]  # first component only
     return msh18.decode("ascii", "replace").strip() or None
+
+
+# How far into the input to look for the first MSH (past FHS and BHS lines).
+_CHARSET_SEARCH_BYTES = 64 * 1024
+
+
+def _first_msh_line(data: bytes) -> bytes | None:
+    """The first line starting with MSH, ignoring MLLP start characters and a BOM."""
+    head = data[:_CHARSET_SEARCH_BYTES]
+    for line in re.split(rb"[\r\n\x1c]", head):
+        stripped = line.lstrip(b"\x0b\xef\xbb\xbf \t")
+        if stripped.startswith(b"MSH"):
+            return stripped
+    return None
 
 
 def _codec_for(charset: str) -> str | None:
