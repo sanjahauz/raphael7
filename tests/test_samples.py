@@ -64,9 +64,9 @@ def test_parser_reports_the_expected_issues(path, expected_codes):
     assert issue_codes(SAMPLES / path) == expected_codes
 
 
-def test_no_national_id_passes_the_check_digit():
-    """No sample may carry an ID that could belong to a real person."""
-    checked = 0
+def national_ids() -> list[str]:
+    """Every 9-digit number in PID-2 and PID-3 of the vendor messages."""
+    found = []
     for path in sorted(SAMPLES.glob("vendor-*/*.hl7")):
         for message in parse_file(path).messages:
             pid = next(segment for segment in message.segments if segment.id == "PID")
@@ -74,9 +74,22 @@ def test_no_national_id_passes_the_check_digit():
                 for repetition in pid.field(field_number):
                     value = repetition[0][0]
                     if len(value) == 9 and value.isdigit():
-                        checked += 1
-                        assert not make_samples.is_valid_israeli_id(value), path
-    assert checked == 180  # one national ID per vendor message
+                        found.append(value)
+    return found
+
+
+def test_no_national_id_passes_the_check_digit():
+    """No sample may carry an ID that could belong to a real person.
+
+    The placeholder 000000000 is the one exception: it passes the check
+    digit but stands for "unknown", which is the variation it tests.
+    """
+    ids = national_ids()
+    real_looking = [value for value in ids if value != make_samples.PLACEHOLDER_ID]
+    assert len(real_looking) > 100
+    for value in real_looking:
+        assert not make_samples.is_valid_israeli_id(value), value
+    assert make_samples.PLACEHOLDER_ID in ids
 
 
 def test_check_digit_rule_accepts_a_valid_id():

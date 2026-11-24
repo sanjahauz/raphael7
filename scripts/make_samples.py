@@ -266,7 +266,7 @@ VENDOR_B_DRIFT_EVERY = 7
 
 @dataclass(frozen=True)
 class Patient:
-    national_id: str  # teudat zehut with a wrong check digit
+    national_id: str  # teudat zehut with a wrong check digit, a placeholder, or ""
     mrn: str
     family: Name
     given: Name
@@ -278,6 +278,7 @@ class Patient:
     zip_code: str
     phone: str
     hmo: Hmo
+    other_ids: tuple[str, ...] = ()  # extra PID-3 repeats (CX values) from other systems
 
 
 @dataclass(frozen=True)
@@ -346,12 +347,50 @@ def fake_israeli_id(rng: random.Random) -> str:
     return first_eight + str(wrong_digit)
 
 
-def make_patient(rng: random.Random, vendor: Vendor) -> Patient:
+# Placeholder used when the ID is unknown (newborn, tourist, unconscious patient).
+# It passes the check digit, and every patient who gets it looks like the same person.
+PLACEHOLDER_ID = "000000000"
+
+# Made-up codes of older systems whose patient IDs were merged into one PID-3.
+LEGACY_SYSTEMS = (
+    "LAB1", "LAB2", "RAD", "PHARM", "CARD", "ONC", "ER", "ICU", "DIAL",
+    "PATH", "BB", "NICU", "OBGYN", "ORTHO", "PSY", "REHAB", "DERM", "ENT",
+)  # fmt: skip
+
+
+def national_id_for(vendor: Vendor, index: int, generated: str) -> str:
+    """The ID quality problems real feeds have.
+
+    A: no national ID for patients 5 and 11 (empty, not even a placeholder).
+    B: the placeholder 000000000 for patients 2, 6 and 10.
+    """
+    if vendor is VENDOR_A and index % 6 == 5:
+        return ""
+    if vendor is VENDOR_B and index % 4 == 2:
+        return PLACEHOLDER_ID
+    return generated
+
+
+def legacy_ids(vendor: Vendor, index: int) -> tuple[str, ...]:
+    """C: patient 7 carries 18 IDs from older systems, 20 PID-3 repeats in all.
+
+    A separate random generator keeps the other patients' data unchanged.
+    """
+    if vendor is not VENDOR_C or index != 7:
+        return ()
+    rng = random.Random(SEED + index)
+    ids = []
+    for system in LEGACY_SYSTEMS:
+        ids.append(f"{rng.randint(10_000, 9_999_999)}^^^{system}^PI")
+    return tuple(ids)
+
+
+def make_patient(rng: random.Random, vendor: Vendor, index: int) -> Patient:
     sex = rng.choice(["F", "M"])
     given_names = FEMALE_NAMES if sex == "F" else MALE_NAMES
     birth = datetime(1940, 1, 1) + timedelta(days=rng.randint(0, 30_000))
     return Patient(
-        national_id=fake_israeli_id(rng),
+        national_id=national_id_for(vendor, index, fake_israeli_id(rng)),
         mrn=f"{vendor.mrn_prefix}{rng.randint(100_000, 999_999)}",
         family=rng.choice(FAMILY_NAMES),
         given=rng.choice(given_names),
@@ -363,6 +402,7 @@ def make_patient(rng: random.Random, vendor: Vendor) -> Patient:
         zip_code=f"{rng.randint(1_000_000, 9_999_999)}",
         phone=f"05{rng.randint(0, 8)}-{rng.randint(1_000_000, 9_999_999)}",
         hmo=rng.choice(HMOS),
+        other_ids=legacy_ids(vendor, index),
     )
 
 
@@ -396,7 +436,7 @@ def make_events(rng: random.Random, vendor: Vendor) -> list[Event]:
         stay = timedelta(days=rng.randint(1, 4), hours=rng.randint(0, 12))
         visit = Visit(
             number=f"V{rng.randint(10_000_000, 99_999_999)}",
-            patient=make_patient(rng, vendor),
+            patient=make_patient(rng, vendor, i),
             ward=ward,
             room=str(rng.randint(1, 30)),
             bed=rng.choice(["A", "B", "C"]),
@@ -486,10 +526,15 @@ def pid(vendor: Vendor, visit: Visit, version: str) -> str:
     A and C: PID-3 holds the national ID and the MRN as two repeats.
     B on 2.3.1: national ID alone in PID-2 (external ID), MRN in PID-3, and
     the visit number in PID-18 (account number) instead of PV1-19.
+    A patient without a national ID has only the MRN (plus any legacy IDs).
     """
     patient = visit.patient
-    national_id = f"{patient.national_id}^^^MOI^NNISR"
     mrn = f"{patient.mrn}^^^{vendor.facility}^MR"
+    identifiers = []
+    if patient.national_id:
+        identifiers.append(f"{patient.national_id}^^^MOI^NNISR")
+    identifiers.append(mrn)
+    identifiers.extend(patient.other_ids)
     fields = {
         1: "1",
         5: f"{text(vendor, patient.family)}^{text(vendor, patient.given)}",
@@ -505,7 +550,7 @@ def pid(vendor: Vendor, visit: Visit, version: str) -> str:
         fields[2] = patient.national_id
         fields[3] = mrn
     else:
-        fields[3] = f"{national_id}{vendor.repetition}{mrn}"
+        fields[3] = vendor.repetition.join(identifiers)
     if vendor is VENDOR_B:
         fields[18] = visit.number
     return segment("PID", fields)

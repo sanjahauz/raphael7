@@ -7,6 +7,8 @@ change the generator and run `uv run python scripts/make_samples.py`.
 **Everything is made up.** Names, addresses, phone numbers, MRNs, visit numbers
 and facilities are invented. Each teudat zehut (Israeli ID) is generated with a
 *wrong* check digit, so it cannot be anyone's real ID; a test checks this.
+The one exception is the placeholder `000000000`, which passes the check digit
+but means "unknown": matching patients on it would merge different people.
 
 ## What each vendor sends
 
@@ -24,6 +26,7 @@ and facilities are invented. Each teudat zehut (Israeli ID) is generated with a
 | Files | one message per file | one message per file | ADT/ORM: one MLLP-framed message per file; ORU: one batch file (FHS/BHS…BTS/FTS) per day |
 | Timestamps | minutes | seconds | minutes |
 | National ID | PID-3, first repeat (MRN second) | PID-2 on 2.3.1; PID-3 on 2.5 | PID-3, first repeat |
+| ID problems | 2 of 12 patients have no national ID | 3 of 12 patients share the placeholder `000000000` | 1 patient has 20 PID-3 repeats (IDs from 18 older systems) |
 | Visit number | PV1-19 | PID-18 | PV1-19 |
 | HMO (kupat holim) | IN1-3 / IN1-4, letter codes | Z-segment `ZPI`, number codes | PV1-20, number codes |
 | EVN-1 | filled | empty | filled |
