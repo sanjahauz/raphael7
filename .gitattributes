@@ -1,0 +1,3 @@
+# Sample messages are byte-exact test data: segment terminators (\r, \n, \r\n),
+# MLLP framing and charsets are the point. Never convert them.
+samples/**/*.hl7 -text -diff
