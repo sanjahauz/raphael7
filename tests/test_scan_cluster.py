@@ -69,3 +69,16 @@ def test_each_vendor_admission_shape_is_its_own_cluster():
         if cluster.signature.message_type == "ADT^A01" and len(cluster.members) >= 10:
             vendors.add(cluster.members[0].file.split("/")[0])
     assert vendors == {"vendor-a", "vendor-b", "vendor-c"}
+
+
+def test_issues_are_kept_per_message_and_per_file(tmp_path):
+    write(tmp_path, "clean.hl7", MSH.format(id=1))
+    write(tmp_path, "lf.hl7", MSH.format(id=2).replace("\r", "\n"))
+    write(tmp_path, "mllp.hl7", "\x0b" + MSH.format(id=3))
+    grouping = cluster_by_signature(scan_files(tmp_path))
+
+    by_message = {}
+    for ref, issues in grouping.message_issues.items():
+        by_message[str(ref)] = [issue.code for issue in issues]
+    assert by_message == {"lf.hl7#1": ["terminator"]}
+    assert list(grouping.file_issues) == ["mllp.hl7"]
