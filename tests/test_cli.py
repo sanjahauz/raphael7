@@ -32,7 +32,7 @@ def test_scan_clean_folder_exits_zero(tmp_path):
 def test_scan_samples_exits_one_with_odd_ones_out():
     result = runner.invoke(app, ["scan", str(SAMPLES)])
     assert result.exit_code == 1
-    assert "24 odd ones out" in result.output
+    assert "Odd ones out:                 24" in result.output
 
 
 def test_scan_json(tmp_path):

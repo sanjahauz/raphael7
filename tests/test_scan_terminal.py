@@ -18,7 +18,10 @@ def render(folder: Path) -> str:
 
 def test_samples_report():
     text = render(SAMPLES)
-    assert "192 messages, 15 feeds, 24 odd ones out" in text
+    assert "Messages found:              192" in text
+    assert "Feeds:                        15" in text
+    assert "Odd ones out:                 24" in text
+    assert "  other-version              8" in text
     assert "MEDIX at HOSP_SOUTH" in text
     assert "ORU^R01  20 messages, version 2.3.1, 2.5" in text
     assert "sometimes filled: OBX-8 8/10" in text
@@ -34,3 +37,12 @@ def test_clean_folder_says_so(tmp_path):
     text = render(tmp_path)
     assert "No odd ones out." in text
     assert "Z-segments: none" in text
+
+
+def test_summary_numbers_line_up_past_ten_thousand():
+    from raphael7.scan.terminal import _summary_line
+
+    small = _summary_line("Files read", 179)
+    large = _summary_line("Messages found", 10000)
+    assert large.endswith("10,000")
+    assert len(small) == len(large)

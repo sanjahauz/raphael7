@@ -18,6 +18,10 @@ from raphael7.scan.signature import Sender
 # Beyond this many "sometimes filled" fields per shape, show a count instead.
 MAX_SOMETIMES_SHOWN = 5
 
+# Summary block: label column, then a right-aligned number column.
+SUMMARY_LABEL_WIDTH = 24
+SUMMARY_NUMBER_WIDTH = 8
+
 
 def print_report(report: ScanReport, console: Console) -> None:
     flagged = set()
@@ -32,12 +36,62 @@ def print_report(report: ScanReport, console: Console) -> None:
 
 
 def _print_summary(report: ScanReport, console: Console) -> None:
-    console.print(
-        f"[bold]raphael7 scan[/] {escape(report.folder)}: "
-        f"{report.file_count} files, {report.message_count} messages, "
-        f"{len(report.feeds)} feeds, "
-        f"[bold]{len(report.outliers)} odd ones out[/]"
-    )
+    """Counts first, so a folder of 10,000 files is understood before any detail.
+
+    Odd ones out are broken down by reason code. One message can be odd for
+    two reasons (e.g. other version and a parse issue), so the breakdown can
+    add up to more than the total: each line answers "how many are odd for
+    this reason".
+    """
+    rows = [
+        ("Files read", report.file_count),
+        ("Files without messages", _count_reason(report, "no-message")),
+        ("Messages found", report.message_count),
+        ("Senders", _sender_count(report)),
+        ("Feeds", len(report.feeds)),
+        ("Shapes", _shape_count(report)),
+    ]
+    console.print(f"[bold]raphael7 scan[/] {escape(report.folder)}")
+    console.print()
+    for label, count in rows:
+        console.print(_summary_line(label, count))
+    console.print(_summary_line("Odd ones out", len(report.outliers)), style="bold")
+    for code, count in _reason_counts(report).items():
+        console.print(_summary_line("  " + code, count, indent=2))
+
+
+def _summary_line(label: str, count: int, indent: int = 0) -> str:
+    """Label left, number right, with thousands separators so 10,000 lines up."""
+    label_text = f"{label}:" if indent == 0 else label
+    return f"{label_text:<{SUMMARY_LABEL_WIDTH}}{count:>{SUMMARY_NUMBER_WIDTH - indent},}"
+
+
+def _sender_count(report: ScanReport) -> int:
+    senders = set()
+    for feed in report.feeds:
+        senders.add(feed.sender)
+    return len(senders)
+
+
+def _shape_count(report: ScanReport) -> int:
+    count = 0
+    for feed in report.feeds:
+        count += len(feed.shapes)
+    return count
+
+
+def _reason_counts(report: ScanReport) -> dict[str, int]:
+    """Messages or files per reason code, most common first."""
+    counts: dict[str, int] = {}
+    for outlier in report.outliers:
+        for reason in outlier.reasons:
+            counts[reason.code] = counts.get(reason.code, 0) + 1
+    by_count = sorted(counts.items(), key=lambda item: item[1], reverse=True)
+    return dict(by_count)
+
+
+def _count_reason(report: ScanReport, code: str) -> int:
+    return _reason_counts(report).get(code, 0)
 
 
 def _print_senders(report: ScanReport, flagged: set[str], console: Console) -> None:
