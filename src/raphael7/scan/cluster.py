@@ -32,6 +32,7 @@ class Grouping:
     message_issues: dict[MessageRef, tuple[ParseIssue, ...]] = field(default_factory=dict)
     # Issues of files that did hold messages, e.g. mllp, batch-count, decode.
     file_issues: dict[str, tuple[ParseIssue, ...]] = field(default_factory=dict)
+    file_count: int = 0  # every file read, with or without messages
 
 
 def cluster_by_signature(files: Iterable[ScannedFile]) -> Grouping:
@@ -40,8 +41,10 @@ def cluster_by_signature(files: Iterable[ScannedFile]) -> Grouping:
     files_without_messages = []
     message_issues = {}
     file_issues = {}
+    file_count = 0
 
     for scanned in files:
+        file_count += 1
         if not scanned.messages:
             files_without_messages.append(scanned)
             continue
@@ -58,7 +61,7 @@ def cluster_by_signature(files: Iterable[ScannedFile]) -> Grouping:
     # dict keeps insertion order, so a stable sort on size alone leaves ties
     # in the order they were first seen: the same folder gives the same report.
     clusters = sorted(by_signature.values(), key=_size, reverse=True)
-    return Grouping(clusters, files_without_messages, message_issues, file_issues)
+    return Grouping(clusters, files_without_messages, message_issues, file_issues, file_count)
 
 
 def _size(cluster: Cluster) -> int:
