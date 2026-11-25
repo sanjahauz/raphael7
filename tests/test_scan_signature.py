@@ -4,7 +4,7 @@ from pathlib import Path
 
 from raphael7.parser import parse_message
 from raphael7.scan.files import scan_files
-from raphael7.scan.signature import Position, segment_order, signature
+from raphael7.scan.signature import Position, Sender, segment_order, signature
 
 SAMPLES = Path(__file__).resolve().parent.parent / "samples"
 
@@ -32,6 +32,8 @@ def test_values_do_not_change_the_signature():
 
 def test_type_trigger_version_and_order():
     sig = signature(msg(MSH, "EVN|A01", "PID|1"))
+    assert sig.sender == Sender("APP", "FAC")
+    assert str(sig.sender) == "APP at FAC"
     assert sig.message_type == "ADT^A01"  # MSH-9.3 is not part of it
     assert sig.version == "2.5"
     assert sig.segments == ("MSH", "EVN", "PID")
@@ -85,3 +87,10 @@ def test_vendor_b_version_drift_gives_two_signatures():
         for message in scanned.messages:
             versions.add(signature(message).version)
     assert versions == {"2.3.1", "2.5"}
+
+
+def test_another_sender_is_another_signature():
+    a = msg(MSH, "PID|1||111")
+    b = msg(MSH.replace("|APP|FAC|", "|APP|FAC_NORTH|"), "PID|1||111")
+    assert signature(a) != signature(b)
+    assert str(signature(b).sender) == "APP at FAC_NORTH"

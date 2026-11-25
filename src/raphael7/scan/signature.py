@@ -1,8 +1,9 @@
 """The structural signature of a message: its shape, without its values.
 
-Two messages with the same signature were built the same way by the sender:
-same MSH-9 type and trigger, same MSH-12 version, same segments in the same
-order, and the same fields filled in. Values are ignored, so two different
+Two messages with the same signature were built the same way by the same
+sender (MSH-3 application at MSH-4 facility): same MSH-9 type and trigger,
+same MSH-12 version, same segments in the same order, and the same fields
+filled in. Values are ignored, so two different
 patients admitted by the same system share a signature.
 
 The signature is small and built from one message at a time, so a large
@@ -27,7 +28,24 @@ class Position:
 
 
 @dataclass(frozen=True, slots=True)
+class Sender:
+    """The sending system: MSH-3 application at MSH-4 facility, raw values.
+
+    One sending system is one application at one facility, so a hospital
+    group with three sites on the same EHR shows up as three senders.
+    Decided 25 Nov, see docs/ROADMAP.md.
+    """
+
+    application: str  # MSH-3, "" when empty
+    facility: str  # MSH-4, "" when empty
+
+    def __str__(self) -> str:
+        return f"{self.application or '?'} at {self.facility or '?'}"
+
+
+@dataclass(frozen=True, slots=True)
 class Signature:
+    sender: Sender
     message_type: str | None  # MSH-9 type^trigger, e.g. ADT^A01 (MSH-9.3 left out)
     version: str | None  # MSH-12, e.g. 2.5
     segments: tuple[str, ...]  # segment IDs in order, a run of the same ID kept once
@@ -37,11 +55,17 @@ class Signature:
 def signature(msg: Message) -> Signature:
     """Build the signature of one message."""
     return Signature(
+        sender=sender_of(msg),
         message_type=msg.message_type,
         version=msg.version,
         segments=segment_order(msg),
         populated=populated_positions(msg),
     )
+
+
+def sender_of(msg: Message) -> Sender:
+    """MSH-3 and MSH-4 as sent (first repetition, components kept)."""
+    return Sender(application=msg.get("MSH-3") or "", facility=msg.get("MSH-4") or "")
 
 
 def segment_order(msg: Message) -> tuple[str, ...]:
