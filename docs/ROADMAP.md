@@ -46,6 +46,8 @@ Who: 🤖 Claude · 👤 Sanja · 🤝 together. Claude builds and Sanja reviews
     - **Why:** the spec says `""` means "delete the stored value" and empty means "not sent", but senders use `""` inconsistently. Scan records only that the sender put something there, so a vendor switching between empty and `""` shows up as a variant.
   - [x] Exact-signature clusters
   - [ ] Near neighbours (Jaccard on populated positions)
+    - **Decision (25 Nov):** a field filled only in some messages because of the data (e.g. OBX-8, the abnormal flag, empty when every result is normal) is one shape, not two. Exact clusters stay split; near neighbours joins them and the report shows "OBX-8 sometimes filled".
+    - **Why:** inside one message a field already counts as filled if any occurrence has it (one OBX with `L` is enough). Across messages the same rule applies: whether a patient has an abnormal result says nothing about how the vendor built the feed.
   - [ ] Outliers (small, distant clusters + messages with parse warnings), Z-segment list, field-usage stats
   - [ ] Terminal report (Rich) + `--json`
 - [ ] 👤 Tag `v0.1`
