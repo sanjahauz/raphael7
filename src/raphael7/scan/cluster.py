@@ -11,6 +11,7 @@ with the number of shapes and messages referenced, not with message size.
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
+from raphael7.parser import ParseIssue
 from raphael7.scan.files import MessageRef, ScannedFile
 from raphael7.scan.signature import Signature, signature
 
@@ -27,18 +28,28 @@ class Grouping:
 
     clusters: list[Cluster]  # biggest first; a tie goes to the one seen first
     files_without_messages: list[ScannedFile]  # kept with their issues, never dropped
+    # Issues are kept only where there are some, so memory stays small on a clean feed.
+    message_issues: dict[MessageRef, tuple[ParseIssue, ...]] = field(default_factory=dict)
+    # Issues of files that did hold messages, e.g. mllp, batch-count, decode.
+    file_issues: dict[str, tuple[ParseIssue, ...]] = field(default_factory=dict)
 
 
 def cluster_by_signature(files: Iterable[ScannedFile]) -> Grouping:
     """Put each message in the cluster of its signature."""
     by_signature: dict[Signature, Cluster] = {}
     files_without_messages = []
+    message_issues = {}
+    file_issues = {}
 
     for scanned in files:
         if not scanned.messages:
             files_without_messages.append(scanned)
             continue
+        if scanned.issues:
+            file_issues[scanned.path] = scanned.issues
         for ref, message in zip(scanned.refs(), scanned.messages, strict=True):
+            if message.issues:
+                message_issues[ref] = message.issues
             sig = signature(message)
             if sig not in by_signature:
                 by_signature[sig] = Cluster(sig)
@@ -47,7 +58,7 @@ def cluster_by_signature(files: Iterable[ScannedFile]) -> Grouping:
     # dict keeps insertion order, so a stable sort on size alone leaves ties
     # in the order they were first seen: the same folder gives the same report.
     clusters = sorted(by_signature.values(), key=_size, reverse=True)
-    return Grouping(clusters, files_without_messages)
+    return Grouping(clusters, files_without_messages, message_issues, file_issues)
 
 
 def _size(cluster: Cluster) -> int:
