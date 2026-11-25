@@ -45,7 +45,9 @@ Who: 🤖 Claude · 👤 Sanja · 🤝 together. Claude builds and Sanja reviews
     - **Decision (24 Nov):** a field holding only `""` (HL7 null) counts as populated.
     - **Why:** the spec says `""` means "delete the stored value" and empty means "not sent", but senders use `""` inconsistently. Scan records only that the sender put something there, so a vendor switching between empty and `""` shows up as a variant.
   - [x] Exact-signature clusters
-  - [ ] Near neighbours (Jaccard on populated positions)
+  - [ ] Shapes per sender, near neighbours across senders
+    - **Decision (25 Nov):** group by sender first (MSH-3 + MSH-4) and message type. A shape is version + segment order; inside a shape, count how often each field is filled. Jaccard is used only to show the closest shape from other senders.
+    - **Why:** measured on `samples/`: the OBX-8 split (0.98), vendor B's 2.5 drift (0.97), the unescaped delimiter (0.98) and vendor A vs C ORM (0.94) all score alike, so one similarity threshold cannot tell same-shape from drift, broken or another sender. MSH-3 + MSH-4 because one sending system is one application at one facility (Sanja).
     - **Decision (25 Nov):** a field filled only in some messages because of the data (e.g. OBX-8, the abnormal flag, empty when every result is normal) is one shape, not two. Exact clusters stay split; near neighbours joins them and the report shows "OBX-8 sometimes filled".
     - **Why:** inside one message a field already counts as filled if any occurrence has it (one OBX with `L` is enough). Across messages the same rule applies: whether a patient has an abnormal result says nothing about how the vendor built the feed.
   - [ ] Outliers (small, distant clusters + messages with parse warnings), Z-segment list, field-usage stats
